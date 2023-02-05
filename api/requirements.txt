@@ -4,4 +4,8 @@ itsdangerous==2.1.2
 Jinja2==3.1.2
 MarkupSafe==2.1.2
 peewee==3.15.4
+Pillow==9.4.0
+pypng==0.20220715.0
+qrcode==7.4.1
+typing_extensions==4.4.0
 Werkzeug==2.2.2
