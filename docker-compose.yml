@@ -16,4 +16,5 @@ services:
       context: .
       dockerfile: ./Dockerfile
     ports:
-      - "127.0.0.1:30000:30000/udp"
+      - "127.0.0.1:${WG_PORT}:30000/udp"
+      - "127.0.0.1:${API_PORT}:30001/tcp"
