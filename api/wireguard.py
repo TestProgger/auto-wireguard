@@ -2,14 +2,20 @@ import subprocess
 import util
 from config import Config
 from model import Client
+import re
 
 def generate_keypair_and_psk():
     privkey = util.exec_command(["wg", "genkey"])
-    pubkey = util.exec_command(["echo", privkey, '|', 'wg', 'pubkey'])
+    pubkey = util.exec_command(['wg', 'pubkey'] , _input=privkey.encode("utf-8"))
     psk = util.exec_command(['wg', 'genpsk'])
-
     return pubkey, privkey, psk
 
+
+def sync_configuration():
+    strip_result = util.exec_command(['wg-quick' , 'strip' , 'wg0'])
+    with open('/etc/wireguard/wg0.conf' , 'w' , encoding="utf-8") as fw:
+        fw.write(strip_result)
+    util.exec_command(["wg" , 'syncconf' , 'wg0' , '/etc/wireguard/wg0.conf'])
 
 def generate_peer_record(id: int, pubkey: str, psk: str):
     peer_record = f"## BEGIN PEER-{id}\n"
@@ -23,8 +29,19 @@ def generate_peer_record(id: int, pubkey: str, psk: str):
 
 
 def write_peer_record(id: int, pubkey: str, psk: str):
-    with open('/etc/wireguard/wg0.conf', "rw", encoding="utf-8") as wg_file:
+    with open('/etc/wireguard/wg0.conf', "a", encoding="utf-8") as wg_file:
         wg_file.write(generate_peer_record(id, pubkey, psk))
+    sync_configuration()
+
+def delete_peer_record(id : int):
+    regexp = re.compile(f"## BEGIN PEER-{id}(.|\s)*## END PEER-{id}" , flags=re.I | re.M)
+    wg_conf = ""
+    with open('/etc/wireguard/wg0.conf' , 'r' , encoding="utf-8") as fr:
+        wg_conf = fr.read()
+    wg_conf = re.sub(regexp , '' , wg_conf)
+    with open('/etc/wireguard/wg0.conf' , 'w' , encoding="utf-8") as fw:
+        fw.write(wg_conf)
+    sync_configuration()
 
 
 def generate_client_config(*,
@@ -38,17 +55,17 @@ def generate_client_config(*,
                            wg_port: int
                            ):
     client_config = "[Interface]\n"
-    client_config += f"PrivateKey = {privkey}"
-    client_config += f"Address = 10.8.0.{host_id}/24"
-    client_config += f"DNS = {dns}"
+    client_config += f"PrivateKey = {privkey}\n"
+    client_config += f"Address = 10.8.0.{host_id}/24\n"
+    client_config += f"DNS = {dns}\n"
     client_config += "\n"
     client_config += "\n"
     client_config += "[Peer]\n"
-    client_config += f"PublicKey = {server_pubkey}"
-    client_config += f"PresharedKey = {psk}"
-    client_config += "AllowedIPs = 0.0.0.0/0, ::/0"
-    client_config += f"PersistentKeepalive = {persistent_keepalive}"
-    client_config += f"Endpoint = {wg_host}:{wg_port}"
+    client_config += f"PublicKey = {server_pubkey}\n"
+    client_config += f"PresharedKey = {psk}\n"
+    client_config += "AllowedIPs = 0.0.0.0/0, ::/0\n"
+    client_config += f"PersistentKeepalive = {persistent_keepalive}\n"
+    client_config += f"Endpoint = {wg_host}:{wg_port}\n"
 
     return client_config
 
@@ -72,7 +89,6 @@ def create_client(*,
                             pre_shared_key = psk
                         )
     write_peer_record( id=client.id  , pubkey=pubkey , psk=psk )
-
     client_config = generate_client_config(
                 dns = Config.wg_default_dns,
                 privkey=privkey,
